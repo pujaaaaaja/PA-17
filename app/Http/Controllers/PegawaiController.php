@@ -53,7 +53,6 @@ class PegawaiController extends Controller
 
     /**
      * Menyimpan dokumentasi observasi.
-     * Dikembalikan ke logika asli Anda untuk menyimpan file dan diperbaiki.
      */
     public function storeObservasi(StoreDokumentasiWithFilesRequest $request, Kegiatan $kegiatan)
     {
@@ -71,7 +70,6 @@ class PegawaiController extends Controller
         if ($request->hasFile('fotos')) {
             foreach ($request->file('fotos') as $file) {
                 $path = $file->store('dokumentasi/fotos', 'public');
-                // PERBAIKAN: Menggunakan nama kolom yang benar 'file_path'
                 $dokumentasi->fotos()->create(['file_path' => $path]);
             }
         }
@@ -88,35 +86,37 @@ class PegawaiController extends Controller
      * Menyimpan dokumentasi penyerahan.
      */
     public function storePenyerahan(Request $request, Kegiatan $kegiatan)
-{
-    // Pastikan validasinya sesuai dengan form baru
-    $validated = $request->validate([
-        'judul' => 'required|string|max:255',
-        'fotos' => 'required|array', // Validasi bahwa 'fotos' adalah array
-        'fotos.*' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048' // Validasi setiap item di dalam array
-    ]);
+    {
+        // Pastikan validasinya sesuai dengan form baru
+        $validated = $request->validate([
+            'judul' => 'required|string|max:255', // 'judul' sesuai dengan nama input di form
+            'fotos' => 'required|array',
+            'fotos.*' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048'
+        ]);
 
-    // Buat dokumentasi kegiatan
-    $dokumentasi = $kegiatan->dokumentasi()->create([
-        'judul' => $validated['judul'],
-        'tipe' => 'penyerahan', // Tandai sebagai dokumentasi penyerahan
-    ]);
+        // Buat dokumentasi kegiatan
+        $dokumentasi = $kegiatan->dokumentasi()->create([
+            'nama_dokumentasi' => $validated['judul'],
+            'tipe' => 'penyerahan',
+        ]);
 
-    // Simpan setiap foto yang diunggah
-    if ($request->hasFile('fotos')) {
-        foreach ($request->file('fotos') as $file) {
-            $path = $file->store('dokumentasi_foto', 'public');
-            $dokumentasi->fotos()->create(['path' => $path]);
+        // Simpan setiap foto yang diunggah
+        if ($request->hasFile('fotos')) {
+            foreach ($request->file('fotos') as $file) {
+                $path = $file->store('dokumentasi_foto', 'public');
+                // PERBAIKAN: Menggunakan nama kolom yang benar 'file_path' sesuai error sebelumnya.
+                $dokumentasi->fotos()->create(['file_path' => $path]);
+            }
         }
+
+        // PERBAIKAN: Mengupdate kolom 'tahapan' (string) menggunakan Enum, bukan 'tahapan_id'.
+        $kegiatan->update([
+            'tahapan' => TahapanKegiatan::PENYELESAIAN,
+        ]);
+
+        // PERBAIKAN: Mengarahkan kembali ke halaman "Kegiatan Saya" agar konsisten.
+        return to_route('pegawai.kegiatan.myIndex')->with('success', 'Dokumentasi penyerahan berhasil disimpan.');
     }
-
-    // Setelah dokumentasi disimpan, lanjutkan tahapan kegiatan
-    $kegiatan->update([
-        'tahapan' => TahapanKegiatan::PENYELESAIAN, // atau tahapan selanjutnya
-    ]);
-
-    return redirect()->back()->with('success', 'Dokumentasi penyerahan berhasil disimpan.');
-}
 
     /**
      * Menyelesaikan kegiatan dan menyimpan berita acara.
@@ -138,11 +138,15 @@ class PegawaiController extends Controller
 
         return to_route('pegawai.kegiatan.myIndex')->with('success', 'Kegiatan telah berhasil diselesaikan.');
     }
+    
+    /**
+     * Mengunggah file dari pihak ketiga.
+     */
     public function uploadPihakKetiga(Request $request, Kegiatan $kegiatan)
     {
-    $validated = $request->validate([
-        'file_pihak_ketiga' => 'required|file|mimes:pdf',
-    ]);
+        $validated = $request->validate([
+            'file_pihak_ketiga' => 'required|file|mimes:pdf',
+        ]);
 
         // Hapus file lama jika ada
         if ($kegiatan->file_pihak_ketiga_path && Storage::disk('public')->exists($kegiatan->file_pihak_ketiga_path)) {
